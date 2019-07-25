@@ -223,7 +223,7 @@ export default {
     },
     async post1 () {
       await this.$http
-        .post('http://api.mgr.xzdesktop.cqttech.com/api/MainPageList', {
+        .post('', {
           appid: 22,
           page: 0,
           pagesize: 10
@@ -244,7 +244,7 @@ export default {
     async post2 () {
       await request.post(
         {
-          url: 'http://api.mgr.xzdesktop.cqttech.com/api/MainPageList',
+          url: '',
           form: {
             appid: 22,
             page: 0,
