@@ -11,7 +11,8 @@ module.exports = {
   node: {
     net: 'empty',
     tls: 'empty',
-    dns: 'empty'
+    dns: 'empty',
+    fs: 'empty'
   },
   entry: {
     app: './src/main.js'

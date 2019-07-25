@@ -8,8 +8,10 @@ import VueRouter from 'vue-router'
 import axios from 'axios'
 import Login from './components/Login'
 import TodoList from './components/TodoList'
+import echarts from 'echarts'
 
 Vue.prototype.$http = axios // 类似于vue-resource的调用方法
+Vue.prototype.$echarts = echarts // 全局引入echarts
 
 Vue.use(ElementUI)
 Vue.use(VueRouter)
@@ -40,6 +42,8 @@ router.beforeEach((to, from, next) => {
       next('/todolist') // 如果有token就转向todolist不返回登录页
     }
     next() // 否则跳转回登录页
+  } else if (to.path === '/index') {
+    next('/index')
   } else {
     if (token !== 'null' && token !== null) {
       Vue.prototype.$http.defaults.headers.common['Authorization'] = 'Bearer ' + token // 注意Bearer后有个空格
