@@ -1,378 +1,199 @@
 <template>
   <el-row class="content">
-    <div id="myChart"
-         :style="{width: '1000px', height: '500px'}"></div>
-    <el-table ref="multipleTable"
-              :data="list"
-              tooltip-effect="dark"
-              style="width: 100%">
-      <el-table-column type="selection"
-                       width="55">
-      </el-table-column>
-      <el-table-column prop="appid"
-                       label="AppID"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="statAt"
-                       label="日期"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="http_install"
-                       label="HTTP安装"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="udp_install"
-                       label="UDP(安装)"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="http_uninstall"
-                       label="HTTP(卸载)"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="udp_uninstall"
-                       label="UDP(卸载)"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="activation"
-                       label="Activation"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="alone_activation"
-                       label="Alone_activation"
-                       width="160">
-      </el-table-column>
-      <el-table-column prop="alone_ip"
-                       label="Alone_ip"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="highest_online"
-                       label="Highest_online"
-                       width="150">
-      </el-table-column>
-      <el-table-column prop="back_user"
-                       label="Back_user"
-                       width="120">
-      </el-table-column>
-      <el-table-column prop="uninstall_percent"
-                       label="Uninstall_percent"
-                       width="200">
-      </el-table-column>
-      <el-table-column prop="alt_day_retain_percent"
-                       label="Alt_day_retain_percent"
-                       width="200">
-      </el-table-column>
-      <el-table-column prop="week_retain_percent"
-                       label="Week_retain_percent"
-                       width="200">
-      </el-table-column>
-      <el-table-column prop="month_retain_percent"
-                       label="Month_retain_percent"
-                       width="200">
-      </el-table-column>
-    </el-table>
+    <el-col :xs="{span:20,offset:2}" :sm="{span:8,offset:8}">
+      <span>
+        欢迎：{{name}}！你的待办事项是：
+      </span>
+      <el-input placeholder="请输入待办事项" v-model="todos" @keyup.enter.native="addTodos"></el-input>
+      <el-tabs v-model="activeName">
+        <el-tab-pane label="待办事项" name="first">
+          <el-col :xs="24">
+            <template v-if="!Done">
+              <template v-for="(item, index) in list">
+                <div class="todo-list" v-if="item.status == false" :key="index">
+                  <span class="item no-finished">
+                    {{ index + 1 }}. {{ item.content }}
+                  </span>
+                  <span class="pull-right">
+                    <el-button size="small" class="finish-item" type="primary" @click="update(index)">完成</el-button>
+                    <el-button class="remove-item" size="small" :plain="true" type="danger" @click="remove(index)">删除</el-button>
+                  </span>
+                </div>
+              </template> 
+            </template>
+            <div v-else-if="Done">
+              暂无待办事项
+            </div>
+          </el-col>
+        </el-tab-pane>
+        <el-tab-pane label="已完成事项" name="second">
+          <template v-if="count > 0">
+            <template v-for="(item, index) in list">
+              <div class="todo-list" v-if="item.status == true" :key="index">
+                <span class="item finished">
+                  {{ index + 1 }}. {{ item.content }}
+                </span>
+                <span class="pull-right">
+                  <el-button size="small" class="restore-item" type="primary" @click="update(index)">还原</el-button>
+                </span>
+              </div>
+            </template> 
+          </template>
+          <div v-else>
+            暂无已完成事项
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-col>
   </el-row>
 </template>
 
 <script>
-import rp from 'request-promise-native'
-import request from 'request'
+
+import jwt from 'jsonwebtoken'
 
 export default {
   created () {
-    this.post3()
+    const userInfo = this.getUserInfo()
+    if (userInfo !== null) {
+      this.id = userInfo.id
+      this.name = userInfo.name
+    } else {
+      this.id = ''
+      this.name = ''
+    }
+    this.getTodolist()
   },
   data () {
     return {
+      name: '',
+      todos: '',
+      activeName: 'first',
       list: [],
-      activation: [],
-      activation_percent: [],
-      alone_activation: [],
-      alone_ip: [],
-      alone_user: [],
-      alt_day_retain_percent: [],
-      appid: [],
-      back_user: [],
-      highest_online: [],
-      http_install: [],
-      http_uninstall: [],
-      month_retain_percent: [],
-      statAt: [],
-      udp_install: [],
-      udp_uninstall: [],
-      udp_uninstall_day: [],
-      uninstall_day_percent: [],
-      uninstall_percent: [],
-      week_retain_percent: [],
-      index: {},
-      size: [
-        '2019-02-25',
-        '2019-03-04',
-        '2019-03-18',
-        '2019-03-26',
-        '2019-04-16',
-        '2019-04-26',
-        '2019-05-04',
-        '2019-05-06',
-        '2019-05-08',
-        '2019-05-09'
-      ],
       count: 0,
       id: ''
     }
   },
-  mounted () {
-    this.drawLine()
-  },
   computed: {
     Done () {
-      let list = 0
-      for (let i in this.index) {
-        list.push(this.index[i])
+      let count = 0
+      let length = this.list.length
+      for (let i in this.list) {
+        this.list[i].status === 1 ? count += 1 : count += 0
       }
-      this.size = list
+      this.count = count
+      if (count === length || length === 0) {
+        return true
+      } else {
+        return false
+      }
     }
   },
 
   methods: {
-    drawLine () {
-      // 基于准备好的dom，初始化echarts实例
-      let myChart = this.$echarts.init(document.getElementById('myChart'))
-      // 绘制图表
-      myChart.setOption({
-        title: {
-          text: '',
-          subtext: ''
-        },
-        tooltip: {
-          trigger: 'axis'
-        },
-        legend: {
-          data: ['UDP(安装)', 'HTTP安装']
-        },
-        toolbox: {
-          show: true,
-          feature: {
-            dataZoom: {
-              yAxisIndex: 'none'
-            },
-            dataView: { readOnly: false },
-            magicType: { type: ['line', 'bar'] },
-            restore: {},
-            saveAsImage: {}
+    addTodos () {
+      if (this.todos === '') {
+        return false
+      }
+      let obj = {
+        status: false,
+        content: this.todos,
+        id: this.id
+      }
+      this.$http.post('/api/todolist', obj)
+        .then((res) => {
+          if (res.status === 200) {
+            this.$message({
+              type: 'success',
+              message: '创建成功！'
+            })
+            this.getTodolist()
+          } else {
+            this.$message.error('创建失败！')
           }
-        },
-        xAxis: {
-          type: 'category',
-          boundaryGap: false,
-          data: this.statAt
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: {
-            formatter: '{value}'
-          }
-        },
-        series: [
-          {
-            name: 'UDP(安装)',
-            type: 'line',
-            data: this.udp_install,
-            markPoint: {
-              data: [
-                { type: 'max', name: '最大值' },
-                { type: 'min', name: '最小值' }
-              ]
-            },
-            markLine: {
-              data: [{ type: 'average', name: '平均值' }]
-            }
-          },
-          {
-            name: 'HTTP安装',
-            type: 'line',
-            data: this.appid,
-            markPoint: {
-              data: [{ name: '周最低', value: 2, xAxis: 1, yAxis: 1.5 }]
-            },
-            markLine: {
-              data: [
-                { type: 'average', name: '平均值' },
-                [
-                  {
-                    symbol: 'none',
-                    x: '90%',
-                    yAxis: 'max'
-                  },
-                  {
-                    symbol: 'circle',
-                    label: {
-                      normal: {
-                        position: 'start',
-                        formatter: '最大值'
-                      }
-                    },
-                    type: 'max',
-                    name: '最高点'
-                  }
-                ]
-              ]
-            }
-          }
-        ]
-      })
-    },
-    async post1 () {
-      await this.$http
-        .post('', {
-          appid: 22,
-          page: 0,
-          pagesize: 10
+        }, (err) => {
+          this.$message.error('创建失败！')
+          console.log(err)
         })
-        .then(
-          function (res) {
-            console.log(typeof res)
-            console.log(res)
-            this.index = res
-            console.log(typeof this.index)
-            console.log(this.index)
-          },
-          function (res) {
-            console.log(res.status)
+      this.todos = ''
+    },
+    update (index) {
+      this.$http.put('/api/todolist/' + this.id + '/' + this.list[index].id + '/' + this.list[index].status)
+        .then((res) => {
+          if (res.status === 200) {
+            this.$message({
+              type: 'success',
+              message: '任务状态更新成功！'
+            })
+            this.getTodolist()
+          } else {
+            this.$message.error('任务状态更新失败！')
           }
-        )
+        }, (err) => {
+          this.$message.error('任务状态更新失败！')
+          console.log(err)
+        })
     },
-    async post2 () {
-      await request.post(
-        {
-          url: '',
-          form: {
-            appid: 22,
-            page: 0,
-            pagesize: 10
+    remove (index) {
+      this.$http.delete('/api/todolist/' + this.id + '/' + this.list[index].id)
+        .then((res) => {
+          if (res.status === 200) {
+            this.$message({
+              type: 'success',
+              message: '任务删除成功！'
+            })
+            this.getTodolist()
+          } else {
+            this.$message.error('任务删除失败！')
           }
-        },
-        (httpResponse, body) => {
-          console.log(typeof body)
-          this.index = body
-        }
-      )
+        }, (err) => {
+          this.$message.error('任务删除失败！')
+          console.log(err)
+        })
     },
-    async post3 (ctx, next) {
-      await this.MainPageModel(result => {
-        if (result !== null) {
-          console.log(typeof result)
-          this.index = result.result
-          this.com()
-        } else {
-          ctx.response.body = {
-            success: false,
-            data: '获取数据出错'
+    getUserInfo () {
+      const token = sessionStorage.getItem('demo-token')
+      if (token !== null && token !== 'null') {
+        let decode = jwt.decode(token)
+        return decode
+      } else {
+        return null
+      }
+    },
+    getTodolist () {
+      const getTodolist = this.$http.get('/api/todolist/' + this.id)
+      getTodolist
+        .then((res) => {
+          if (res.status === 200) {
+            this.list = res.data.result
+          } else {
+            this.$message.error('获取列表失败！')
           }
-        }
-      })
-    },
-    com () {
-      for (let i in this.index) {
-        this.list.push(this.index[i])
-      }
-      for (let i in this.list) {
-        this.activation.push(this.list[i].activation)
-        this.activation_percent.push(this.list[i].activation_percent)
-        this.alone_activation.push(this.list[i].alone_activation)
-        this.alone_ip.push(this.list[i].alone_ip)
-        this.alone_user.push(this.list[i].alone_user)
-        this.alt_day_retain_percent.push(this.list[i].alt_day_retain_percent)
-        this.appid.push(this.list[i].appid)
-        this.back_user.push(this.list[i].back_user)
-        this.highest_online.push(this.list[i].highest_online)
-        this.http_install.push(this.list[i].http_install)
-        this.http_uninstall.push(this.list[i].http_uninstall)
-        this.month_retain_percent.push(this.list[i].month_retain_percent)
-        this.statAt.push(this.list[i].statAt)
-        this.udp_install.push(this.list[i].udp_install)
-        this.udp_uninstall.push(this.list[i].udp_uninstall)
-        this.udp_uninstall_day.push(this.list[i].udp_uninstall_day)
-        this.uninstall_day_percent.push(this.list[i].uninstall_day_percent)
-        this.uninstall_percent.push(this.list[i].uninstall_percent)
-        this.week_retain_percent.push(this.list[i].week_retain_percent)
-      }
-      this.drawLine()
-      console.log(Array.isArray(this.size))
-      console.log(this.size)
-      console.log(Array.isArray(this.statAt))
-      console.log(this.statAt)
-      console.log(this.uninstall_day_percent)
-      console.log(this.list)
-      console.log(this.index)
-    },
-    async MainPageModel (callback) {
-      const sendData = {
-        appid: 22,
-        page: 0,
-        pagesize: 10
-      }
-      await this.PostDataToApi(
-        'http://api.mgr.xzdesktop.cqttech.com/api/MainPageList',
-        sendData
-      ).then(
-        function (data) {
-          callback(data)
-        },
-        () => {
-          callback(null)
-        }
-      )
-    },
-    PostDataToApi (apiURL, sendData) {
-      return new Promise(function (resolve, reject) {
-        let options = {
-          uri: apiURL,
-          method: 'POST',
-          json: true,
-          encoding: null,
-          headers: {
-            'content-type': 'application/json'
-          },
-          body: sendData
-        }
-        rp(options)
-          .then(function (body) {
-            console.log(body)
-            resolve(body)
-          })
-          .catch(function () {
-            reject(new Error('wocuole'))
-          })
-      })
+        }, (err) => {
+          this.$message.error('获取列表失败！')
+          console.log(err)
+        })
+      return getTodolist
     }
   }
 }
 </script>
 
 <style lang="stylus" scoped>
-.el-input {
-  margin: 20px auto;
-}
-
-.todo-list {
-  width: 100%;
-  margin-top: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
-  overflow: hidden;
-  text-align: left;
-
-  .item {
-    font-size: 20px;
-
-    &.finished {
-      text-decoration: line-through;
-      color: #ddd;
-    }
-  }
-}
-
-.pull-right {
-  float: right;
-}
+  .el-input
+    margin 20px auto
+  .todo-list
+    width 100%
+    margin-top 8px
+    padding-bottom 8px
+    border-bottom 1px solid #eee
+    overflow hidden
+    text-align left
+    .item
+      font-size 20px
+      &.finished
+        text-decoration line-through
+        color #ddd
+  .pull-right
+    float right
 </style>
